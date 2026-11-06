@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>テック企業設立年代クイズ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @keyframes bounceIn { 0%{transform:scale(0.8);opacity:0} 60%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+  .bounce-in { animation: bounceIn 0.3s ease-out; }
+  .drag-item { cursor: grab; user-select: none; touch-action: none; }
+  .drag-item:active { cursor: grabbing; }
+  .drag-over { outline: 2px dashed #60a5fa; }
+</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+<div class="max-w-lg mx-auto p-4">
+  <header class="text-center py-5">
+    <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">テック企業設立年代クイズ</h1>
+    <p class="text-gray-400 text-sm mt-1">40社の設立年を当てよう！</p>
+  </header>
+
+  <!-- Start screen -->
+  <div id="screen-start">
+    <div class="bg-gray-800 rounded-2xl p-6 mb-4 text-center">
+      <div class="text-5xl mb-3">🏢</div>
+      <div id="start-hs" class="text-sm text-yellow-400 mb-4"></div>
+      <div class="grid grid-cols-2 gap-3 mb-5">
+        <button onclick="startGame('year')" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-4 rounded-xl transition" aria-label="西暦当てモードで開始">
+          📅 西暦当て<br><span class="text-xs font-normal text-blue-200">年号を直接入力</span>
+        </button>
+        <button onclick="startGame('sort')" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-4 rounded-xl transition" aria-label="並べ替えモードで開始">
+          🔀 並べ替え<br><span class="text-xs font-normal text-purple-200">古い順に並べる</span>
+        </button>
+      </div>
+      <p class="text-gray-400 text-xs">各モード10問・全40問のランダム出題</p>
+    </div>
+  </div>
+
+  <!-- Quiz screen -->
+  <div id="screen-quiz" class="hidden">
+    <div class="flex justify-between items-center mb-4">
+      <span id="q-counter" class="text-gray-400 text-sm"></span>
+      <span id="q-score" class="text-yellow-400 font-bold text-sm">スコア: 0</span>
+    </div>
+    <div id="progress-bar" class="w-full bg-gray-700 rounded-full h-2 mb-5">
+      <div id="progress-fill" class="bg-blue-500 h-2 rounded-full transition-all" style="width:0%"></div>
+    </div>
+
+    <!-- Year mode -->
+    <div id="year-mode" class="hidden">
+      <div id="year-card" class="bg-gray-800 rounded-2xl p-6 mb-5 bounce-in">
+        <div class="text-xs text-gray-400 mb-2" id="year-category"></div>
+        <div class="text-3xl font-bold text-center mb-2" id="year-company"></div>
+        <div class="text-sm text-gray-400 text-center" id="year-hint"></div>
+      </div>
+      <div class="flex gap-3 mb-4">
+        <input id="year-input" type="number" min="1970" max="2025" placeholder="例: 1998"
+          class="flex-1 bg-gray-800 border border-gray-600 rounded-xl p-3 text-xl text-center focus:ring-2 focus:ring-blue-500 outline-none"
+          aria-label="設立年を入力" onkeydown="if(event.key==='Enter')checkYear()">
+        <button onclick="checkYear()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 rounded-xl" aria-label="回答する">答える</button>
+      </div>
+    </div>
+
+    <!-- Sort mode -->
+    <div id="sort-mode" class="hidden">
+      <p class="text-sm text-gray-400 mb-3 text-center">古い順（上が古い）に並べ替えてください</p>
+      <div id="sort-items" class="space-y-2 mb-4"></div>
+      <button onclick="checkSort()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl" aria-label="並び順を確認する">
+        この順で確定！
+      </button>
+    </div>
+
+    <!-- Feedback -->
+    <div id="feedback" class="hidden rounded-xl p-4 mb-4 bounce-in">
+      <div id="feedback-title" class="font-bold mb-1 text-lg"></div>
+      <div id="feedback-year" class="text-sm mb-1"></div>
+      <div id="feedback-fact" class="text-xs text-gray-300"></div>
+    </div>
+    <button id="next-btn" onclick="nextQuestion()" class="hidden w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-xl text-sm">次の問題 →</button>
+  </div>
+
+  <!-- Result screen -->
+  <div id="screen-result" class="hidden text-center">
+    <div class="bg-gray-800 rounded-2xl p-7 mb-4">
+      <div id="res-icon" class="text-5xl mb-2"></div>
+      <h2 id="res-title" class="text-xl font-bold mb-1"></h2>
+      <div id="res-score" class="text-4xl font-bold text-blue-400 mb-2"></div>
+      <div id="res-sub" class="text-gray-400 text-sm mb-5"></div>
+      <div id="res-new" class="text-yellow-400 font-bold mb-3"></div>
+      <button onclick="showStart()" class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold py-3 rounded-xl">
+        もう一度プレイ
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COMPANIES = [
+  { name:'IBM', year:1911, category:'老舗', fact:'1911年: IBMの前身CTR社が設立。同年、初の超高層ビル完成ラッシュ時代。' },
+  { name:'HP（ヒューレット・パッカード）', year:1939, category:'老舗', fact:'1939年: ガレージ創業の元祖。シリコンバレー発展の礎となった。' },
+  { name:'Texas Instruments', year:1951, category:'半導体', fact:'1951年: 朝鮮戦争の年。TIはのちにシリコントランジスタを実用化した。' },
+  { name:'Intel', year:1968, category:'半導体', fact:'1968年: アポロ計画が最高潮の年。IntelはDRAMから始まった。' },
+  { name:'AMD', year:1969, category:'半導体', fact:'1969年: 人類初の月面着陸の翌年、Intel元幹部が設立。' },
+  { name:'Microsoft', year:1975, category:'ソフトウェア', fact:'1975年: ベトナム戦争終結の年。ゲイツ&アレンがBASIC言語から始めた。' },
+  { name:'Apple', year:1976, category:'コンシューマ', fact:'1976年: アメリカ建国200周年。ジョブズとウォズニアックがガレージで創業。' },
+  { name:'Oracle', year:1977, category:'エンタープライズ', fact:'1977年: Star Wars公開の年。エリソンがSQLデータベースに賭けた。' },
+  { name:'Cisco', year:1984, category:'ネットワーク', fact:'1984年: マック登場と同年。スタンフォード大学のカップルが創業。' },
+  { name:'Dell', year:1984, category:'ハードウェア', fact:'1984年: マイケル・デルが19歳で大学の寮室から始めた。' },
+  { name:'Sun Microsystems', year:1982, category:'老舗', fact:'1982年: Javaの生みの親企業。ワークステーション市場を開拓。' },
+  { name:'Qualcomm', year:1985, category:'半導体', fact:'1985年: CDMAの特許を持つ企業。スマートフォン時代の基盤技術。' },
+  { name:'Nvidia', year:1993, category:'半導体', fact:'1993年: ジェン・スン・ファンがGPUビジネスに賭けた。' },
+  { name:'Amazon', year:1994, category:'EC', fact:'1994年: 最初は本の通販から。ジェフ・ベゾスが車でシアトルに引越した。' },
+  { name:'Yahoo!', year:1995, category:'インターネット', fact:'1995年: Windows 95発売の年。スタンフォード大学院生が始めたリンク集。' },
+  { name:'eBay', year:1995, category:'EC', fact:'1995年: ピエール・オミダイアーが壊れたレーザーポインターをオークションにかけた話は有名。' },
+  { name:'Google', year:1998, category:'インターネット', fact:'1998年: Windows 98が発売された年。ペイジとブリンがPageRankを発明。' },
+  { name:'Alibaba', year:1999, category:'EC', fact:'1999年: 馬雲（ジャック・マー）が自宅アパートで18人と起業。' },
+  { name:'Baidu', year:2000, category:'インターネット', fact:'2000年: ITバブル崩壊の年。李彦宏が中国版Google構築を決意。' },
+  { name:'Wikipedia', year:2001, category:'インターネット', fact:'2001年: 9.11テロの年。ジミー・ウェールズが無料百科事典の夢を実現。' },
+  { name:'PayPal', year:1998, category:'フィンテック', fact:'1998年: イーロン・マスクのX.comが後にPayPalとなった。' },
+  { name:'LinkedIn', year:2002, category:'SNS', fact:'2002年: Friendster登場の翌年。ビジネスSNSという新カテゴリを作った。' },
+  { name:'Tesla', year:2003, category:'EV', fact:'2003年: マーティン・エバーハードが電気スポーツカーを夢見て創業。' },
+  { name:'Facebook', year:2004, category:'SNS', fact:'2004年: マーク・ザッカーバーグがハーバード大寮室で始めた。' },
+  { name:'YouTube', year:2005, category:'動画', fact:'2005年: PayPal社員3人が動画共有の未来を見越して起業。翌年Googleが買収。' },
+  { name:'Twitter', year:2006, category:'SNS', fact:'2006年: ジャック・ドーシーが140文字のつぶやきサービスを発案。' },
+  { name:'Dropbox', year:2007, category:'クラウド', fact:'2007年: iPhone登場の年。ドルー・ヒューストンが飛行機でUSBを忘れて着想。' },
+  { name:'Airbnb', year:2008, category:'シェアリング', fact:'2008年: リーマンショックの年。エアマットレスを貸して家賃を稼いだのが始まり。' },
+  { name:'GitHub', year:2008, category:'開発者', fact:'2008年: Gitリポジトリのホスティングで世界のコード共有を変革。' },
+  { name:'Uber', year:2009, category:'シェアリング', fact:'2009年: リーマン後の不況期。トラビス・カラニックがタクシー不満から着想。' },
+  { name:'WhatsApp', year:2009, category:'メッセージ', fact:'2009年: iPhone App Store全盛期。2014年にFacebook(Meta)が190億ドルで買収。' },
+  { name:'Instagram', year:2010, category:'SNS', fact:'2010年: 写真フィルターアプリが爆発的普及。2012年にFacebook(Meta)が10億ドルで買収。' },
+  { name:'Snapchat', year:2011, category:'SNS', fact:'2011年: 消えるメッセージという概念でスタンフォード学生に爆発的普及。' },
+  { name:'Stripe', year:2010, category:'フィンテック', fact:'2010年: コリソン兄弟がオンライン決済の複雑さをたった7行のコードに。' },
+  { name:'Slack', year:2013, category:'エンタープライズ', fact:'2013年: もともとゲーム会社の社内チャットツールが独立してプロダクトに。' },
+  { name:'Zoom', year:2011, category:'コミュニケーション', fact:'2011年: エリック・ヨアンがCisco離職後に設立。コロナ禍で世界的日常語に。' },
+  { name:'OpenAI', year:2015, category:'AI', fact:'2015年: イーロン・マスク、サム・アルトマン等が「安全なAI」を目指して設立。' },
+  { name:'Snowflake', year:2012, category:'クラウド', fact:'2012年: クラウドデータウェアハウスのパイオニア。2020年に史上最大のソフトウェアIPO。' },
+  { name:'Anthropic', year:2021, category:'AI', fact:'2021年: OpenAI離職者のダリオ・アモデイらが「憲法AI」を掲げて設立。' },
+  { name:'Stability AI', year:2019, category:'AI', fact:'2019年: Stable Diffusionで画像AI民主化の先駆けとなった企業。' },
+];
+
+const HS_KEY_YEAR = 'tech-hs-year', HS_KEY_SORT = 'tech-hs-sort';
+let mode = 'year', questions = [], currentQ = 0, score = 0;
+let sortOrder = [];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function showStart() {
+  document.getElementById('screen-start').classList.remove('hidden');
+  document.getElementById('screen-quiz').classList.add('hidden');
+  document.getElementById('screen-result').classList.add('hidden');
+  const hsY = localStorage.getItem(HS_KEY_YEAR);
+  const hsS = localStorage.getItem(HS_KEY_SORT);
+  const parts = [];
+  if (hsY) parts.push('西暦当て最高: ' + hsY + '点');
+  if (hsS) parts.push('並べ替え最高: ' + hsS + '点');
+  document.getElementById('start-hs').textContent = parts.join('  |  ');
+}
+
+function startGame(m) {
+  mode = m;
+  questions = shuffle(COMPANIES).slice(0, 10);
+  currentQ = 0; score = 0;
+  document.getElementById('screen-start').classList.add('hidden');
+  document.getElementById('screen-quiz').classList.remove('hidden');
+  document.getElementById('screen-result').classList.add('hidden');
+  document.getElementById('year-mode').classList.toggle('hidden', m !== 'year');
+  document.getElementById('sort-mode').classList.toggle('hidden', m !== 'sort');
+  renderQuestion();
+}
+
+function renderQuestion() {
+  document.getElementById('q-counter').textContent = (currentQ+1) + ' / 10';
+  document.getElementById('q-score').textContent = 'スコア: ' + score;
+  document.getElementById('progress-fill').style.width = (currentQ/10*100) + '%';
+  document.getElementById('feedback').classList.add('hidden');
+  document.getElementById('next-btn').classList.add('hidden');
+
+  if (mode === 'year') {
+    const q = questions[currentQ];
+    document.getElementById('year-company').textContent = q.name;
+    document.getElementById('year-category').textContent = q.category;
+    document.getElementById('year-hint').textContent = '';
+    document.getElementById('year-input').value = '';
+    document.getElementById('year-input').disabled = false;
+    document.getElementById('year-card').classList.remove('bounce-in'); void document.getElementById('year-card').offsetWidth; document.getElementById('year-card').classList.add('bounce-in');
+  } else {
+    // Sort mode: 5 companies from remaining questions
+    const batch = questions.slice(currentQ, Math.min(currentQ+5, questions.length));
+    if (batch.length < 2) { showResult(); return; }
+    sortOrder = shuffle(batch.map((_, i) => i));
+    renderSortItems(batch);
+  }
+}
+
+function renderSortItems(batch) {
+  const container = document.getElementById('sort-items');
+  container.innerHTML = '';
+  sortOrder.forEach((idx, pos) => {
+    const item = document.createElement('div');
+    item.className = 'drag-item bg-gray-800 rounded-xl p-3 flex items-center gap-3 border border-gray-700';
+    item.setAttribute('draggable', 'true');
+    item.setAttribute('data-pos', pos);
+    item.setAttribute('aria-label', batch[idx].name + '、ドラッグで並べ替え');
+    item.dataset.idx = idx;
+
+    const handle = document.createElement('span'); handle.className = 'text-gray-500 select-none'; handle.textContent = '⠿';
+    const up = document.createElement('button'); up.className = 'text-gray-400 hover:text-white px-1'; up.textContent = '↑';
+    up.setAttribute('aria-label', '上に移動');
+    up.onclick = () => moveItem(pos, -1, batch);
+    const down = document.createElement('button'); down.className = 'text-gray-400 hover:text-white px-1'; down.textContent = '↓';
+    down.setAttribute('aria-label', '下に移動');
+    down.onclick = () => moveItem(pos, 1, batch);
+    const name = document.createElement('span'); name.className = 'flex-1 font-medium'; name.textContent = batch[idx].name;
+
+    item.appendChild(handle); item.appendChild(up); item.appendChild(down); item.appendChild(name);
+
+    item.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', pos); item.style.opacity = '0.5'; });
+    item.addEventListener('dragend', () => item.style.opacity = '1');
+    item.addEventListener('dragover', e => { e.preventDefault(); item.classList.add('drag-over'); });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault(); item.classList.remove('drag-over');
+      const fromPos = parseInt(e.dataTransfer.getData('text/plain'));
+      const toPos = pos;
+      if (fromPos !== toPos) { [sortOrder[fromPos], sortOrder[toPos]] = [sortOrder[toPos], sortOrder[fromPos]]; renderSortItems(batch); }
+    });
+    container.appendChild(item);
+  });
+}
+
+function moveItem(pos, dir, batch) {
+  const newPos = pos + dir;
+  if (newPos < 0 || newPos >= sortOrder.length) return;
+  [sortOrder[pos], sortOrder[newPos]] = [sortOrder[newPos], sortOrder[pos]];
+  renderSortItems(batch);
+}
+
+function checkYear() {
+  const q = questions[currentQ];
+  const input = document.getElementById('year-input');
+  const val = parseInt(input.value);
+  if (!val) { alert('年号を入力してください'); return; }
+
+  input.disabled = true;
+  const diff = Math.abs(val - q.year);
+  const isCorrect = diff <= 3;
+  if (isCorrect) score += diff === 0 ? 10 : diff <= 1 ? 7 : 4;
+
+  const fb = document.getElementById('feedback');
+  fb.classList.remove('hidden','bg-green-900','bg-yellow-900','bg-red-900');
+  if (diff === 0) { fb.classList.add('bg-green-900'); document.getElementById('feedback-title').textContent = '✅ 完璧！ ±0'; }
+  else if (diff <= 3) { fb.classList.add('bg-yellow-900'); document.getElementById('feedback-title').textContent = '✅ 正解！ ±' + diff + '年'; }
+  else { fb.classList.add('bg-red-900'); document.getElementById('feedback-title').textContent = '❌ 不正解 (' + diff + '年ズレ)'; }
+
+  document.getElementById('feedback-year').textContent = '正解: ' + q.year + '年設立';
+  document.getElementById('feedback-fact').textContent = q.fact;
+  document.getElementById('next-btn').classList.remove('hidden');
+  document.getElementById('next-btn').textContent = currentQ < 9 ? '次の問題 →' : '結果を見る';
+  document.getElementById('q-score').textContent = 'スコア: ' + score;
+}
+
+function checkSort() {
+  const batch = questions.slice(currentQ, Math.min(currentQ+5, questions.length));
+  const sorted = [...sortOrder].sort((a,b) => batch[a].year - batch[b].year);
+  let correct = 0;
+  sortOrder.forEach((v, i) => { if (v === sorted[i]) correct++; });
+  const pts = Math.floor(correct / sortOrder.length * 10);
+  score += pts;
+
+  const fb = document.getElementById('feedback');
+  fb.classList.remove('hidden','bg-green-900','bg-yellow-900','bg-red-900');
+  fb.classList.add(correct === sortOrder.length ? 'bg-green-900' : correct >= sortOrder.length/2 ? 'bg-yellow-900' : 'bg-red-900');
+  document.getElementById('feedback-title').textContent = correct + '/' + sortOrder.length + '個正解！ (+' + pts + '点)';
+
+  const correctNames = sorted.map(i => batch[i].name + '（' + batch[i].year + '年）').join(' → ');
+  document.getElementById('feedback-year').textContent = '正解の順: ' + correctNames;
+  document.getElementById('feedback-fact').textContent = batch[sorted[0]].fact;
+
+  document.getElementById('next-btn').classList.remove('hidden');
+  currentQ += batch.length - 1;
+  document.getElementById('next-btn').textContent = currentQ < 9 ? '次の問題 →' : '結果を見る';
+  document.getElementById('q-score').textContent = 'スコア: ' + score;
+}
+
+function nextQuestion() {
+  currentQ++;
+  if (currentQ >= 10) { showResult(); return; }
+  renderQuestion();
+}
+
+function showResult() {
+  document.getElementById('screen-quiz').classList.add('hidden');
+  document.getElementById('screen-result').classList.remove('hidden');
+
+  const maxScore = 100;
+  const pct = Math.round(score / maxScore * 100);
+  let icon, title;
+  if (pct >= 80) { icon = '🏆'; title = 'テック歴史家レベル！'; }
+  else if (pct >= 60) { icon = '🎓'; title = 'テック通レベル！'; }
+  else if (pct >= 40) { icon = '📚'; title = 'テック学習者レベル'; }
+  else { icon = '🌱'; title = 'テック入門者レベル'; }
+
+  document.getElementById('res-icon').textContent = icon;
+  document.getElementById('res-title').textContent = title;
+  document.getElementById('res-score').textContent = score + '点';
+  document.getElementById('res-sub').textContent = mode === 'year' ? '西暦当てモード' : '並べ替えモード';
+
+  const hsKey = mode === 'year' ? HS_KEY_YEAR : HS_KEY_SORT;
+  const hs = parseInt(localStorage.getItem(hsKey)) || 0;
+  if (score > hs) {
+    localStorage.setItem(hsKey, score);
+    document.getElementById('res-new').textContent = '🎉 ハイスコア更新！';
+  } else {
+    document.getElementById('res-new').textContent = '';
+  }
+}
+</script>
+</body>
+</html>
